@@ -4,13 +4,13 @@ CREATE FUNCTION forwardcompat() RETURNS trigger AS $$
         IF (TG_OP = 'INSERT') THEN
             INSERT INTO newcustomers VALUES (NEW.customerid, NEW.name, NEW.birthdate);
             IF (NEW.frequentflieron IS NOT NULL) THEN
-                INSERT INTO ffairlines VALUES (NEW.customerid, NEW.frequentflieron, (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (f.local_arrival_time - f.local_departing_time)) / 60), 0) FROM flights f WHERE f.airlineid = NEW.frequentflieron));
+                INSERT INTO ffairlines VALUES (NEW.customerid, NEW.frequentflieron, 0);
             END IF;
         ELSIF (TG_OP = 'UPDATE') THEN 
             UPDATE newcustomers
             SET birthdate=NEW.birthdate, name=NEW.name
             WHERE NEW.customerid = customerid;
-            IF (OLD.frequentflieron <> NEW.frequentflieron) THEN
+            IF ((OLD.frequentflieron IS NULL AND NEW.frequentflieron IS NOT NULL) OR OLD.frequentflieron <> NEW.frequentflieron) THEN
                 IF (NEW.frequentflieron IS NULL) THEN
                     DELETE FROM ffairlines WHERE customerid = NEW.customerid;
                 ELSE 
@@ -38,7 +38,7 @@ EXECUTE PROCEDURE forwardcompat();
 CREATE FUNCTION backwardscompat() RETURNS trigger AS $$
     BEGIN
         IF (TG_OP = 'INSERT') THEN
-            INSERT INTO customers VALUES (NEW.customerid, NEW.name, NEW.birthdate, (SELECT f.airlineid FROM flights f JOIN flewon fw ON f.flightid = fw.flightid WHERE fw.customerid = NEW.customerid ORDER BY fw.flightdate DESC, f.airlineid ASC LIMIT 1) );
+            INSERT INTO customers VALUES (NEW.customerid, NEW.name, NEW.birthdate, NULL);
         ELSIF (TG_OP = 'UPDATE') THEN 
             UPDATE customers
             SET birthdate=NEW.birthdate, name=NEW.name
