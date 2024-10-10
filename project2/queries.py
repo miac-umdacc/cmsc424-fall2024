@@ -33,19 +33,20 @@ GROUP BY
 ### not the airlines, basically erasing our excluding factor
 ###
 queries[3] = """
-WITH airlines_jfk AS (
+WITH airlines_with_jfk AS (
     SELECT DISTINCT a.airlineid
+    FROM flights_jfk j
+    JOIN flights_airports a ON j.flightid = a.flightid
+),
+airlines_flights_count AS (
+    SELECT a.airlineid, COUNT(a.flightid) AS flight_count
     FROM flights_airports a
-    JOIN flights_jfk j 
-        ON a.flightid = j.flightid
+    GROUP BY a.airlineid
+    HAVING COUNT(a.flightid) >= 15
 )
 SELECT a.airlineid
-FROM flights_airports a 
-LEFT JOIN airlines_jfk aj 
-	ON a.airlineid = aj.airlineid
-WHERE aj.airlineid IS NULL 
-GROUP BY a.airlineid
-HAVING COUNT(*) >= 15; 
+FROM airlines_flights_count a
+WHERE a.airlineid NOT IN (SELECT airlineid FROM airlines_with_jfk);
 
 
 """

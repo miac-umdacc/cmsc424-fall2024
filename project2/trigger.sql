@@ -58,47 +58,68 @@ FOR EACH ROW
 WHEN (pg_trigger_depth() = 0) 
 EXECUTE PROCEDURE backwardscompat();
 
---trigger 3 ffairlines-> customers.frequentflieron
-CREATE FUNCTION ffcascade() RETURNS trigger AS $$
-    BEGIN
-            UPDATE customers
-            SET frequentflieron = (SELECT f.airlineid FROM flights f
-                                JOIN flewon fw ON f.flightid = fw.flightid
-                                WHERE fw.customerid = NEW.customerid
-                                ORDER BY fw.flightdate DESC, f.airlineid ASC
-                                LIMIT 1)
-            WHERE NEW.customerid = customerid;
-            RETURN NULL;
-    END;
+CREATE FUNCTION update_customers_from_ffairlines() RETURNS trigger AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        UPDATE customers
+        SET frequentflieron = (
+            SELECT airlineid
+            FROM ffairlines
+            WHERE customerid = NEW.customerid
+            ORDER BY points DESC, airlineid ASC
+            LIMIT 1
+        )
+        WHERE customerid = NEW.customerid;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        UPDATE customers
+        SET frequentflieron = (
+            SELECT airlineid
+            FROM ffairlines
+            WHERE customerid = NEW.customerid
+            ORDER BY points DESC, airlineid ASC
+            LIMIT 1
+        )
+        WHERE customerid = NEW.customerid;
+    ELSIF (TG_OP = 'DELETE') THEN
+        UPDATE customers
+        SET frequentflieron = (
+            SELECT airlineid
+            FROM ffairlines
+            WHERE customerid = OLD.customerid
+            ORDER BY points DESC, airlineid ASC
+            LIMIT 1
+        )
+        WHERE customerid = OLD.customerid;
+    END IF;
+    RETURN NULL;
+END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER ffcascadetrigger 
-AFTER INSERT OR DELETE OR UPDATE 
+CREATE TRIGGER ffairlines_trigger
+AFTER INSERT OR UPDATE OR DELETE
 ON ffairlines
-FOR EACH ROW 
-WHEN (pg_trigger_depth() = 0) 
-EXECUTE PROCEDURE ffcascade();
+FOR EACH ROW
+WHEN (pg_trigger_depth() = 0)
+EXECUTE PROCEDURE update_customers_from_ffairlines();
 
-
--- trigger 4 flewon -> customers
-
-CREATE FUNCTION newflightshift() RETURNS trigger AS $$
-    BEGIN
-            UPDATE customers
-            SET frequentflieron = (SELECT f.airlineid FROM flights f
-                                JOIN flewon fw ON f.flightid = fw.flightid
-                                WHERE fw.customerid = NEW.customerid
-                                ORDER BY fw.flightdate DESC, f.airlineid ASC
-                                LIMIT 1)
-
-            WHERE NEW.customerid = customerid;
-            RETURN NULL;
-    END;
+CREATE FUNCTION update_customers_from_flewon() RETURNS trigger AS $$
+BEGIN
+    UPDATE customers
+    SET frequentflieron = (
+        SELECT airlineid
+        FROM ffairlines
+        WHERE customerid = NEW.customerid
+        ORDER BY points DESC, airlineid ASC
+        LIMIT 1
+    )
+    WHERE customerid = NEW.customerid;
+    RETURN NULL;
+END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER newflighttrigger 
-AFTER INSERT OR DELETE OR UPDATE 
+CREATE TRIGGER flewon_trigger
+AFTER INSERT OR UPDATE OR DELETE
 ON flewon
-FOR EACH ROW 
-WHEN (pg_trigger_depth() = 0) 
-EXECUTE PROCEDURE newflightshift();
+FOR EACH ROW
+WHEN (pg_trigger_depth() = 0)
+EXECUTE PROCEDURE update_customers_from_flewon();
